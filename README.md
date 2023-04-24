@@ -1,5 +1,4 @@
 # Polaris
-## Readme
 Polaris is a solution forming part of my dissertation project on the suitability of the PC platform for game development. 
 
 It features several mechanics present in similar platformer games, with a focus on the PC specific controls such as a mouse-controlled dash.
