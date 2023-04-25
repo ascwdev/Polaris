@@ -16,7 +16,7 @@ using Vector3 = UnityEngine.Vector3;
  * Date: 15/03/23
  *
  * This is a player controller script for influencing the behavior of the
- * player character in Polarity. It contains methods for movement, jumping,
+ * player character in Polaris. It contains methods for movement, jumping,
  * dashing, as well as the relevant associated variables for the player object.
  */
 
@@ -80,14 +80,14 @@ public class Player : MonoBehaviour
     [SerializeField] private float jumpTime = .2f;
     private float jumpTimer;
     private bool canJump => coyoteTimeCounter > 0 && Input.GetButtonDown("Jump") && !hasDashed;
-    [SerializeField] private bool queueJump; 
+    private bool queueJump; 
 
     [Header("Dash")] 
     [SerializeField] private bool isDashing;
     [SerializeField] private bool hasDashed;
     [SerializeField] private float dashForce = 20f;
     private Vector2 dashDir;
-    [SerializeField] private bool queueDash;
+    private bool queueDash;
 
     [Header("Wall Slide")] 
     [SerializeField] private float slideFriction = 2f;
@@ -108,14 +108,14 @@ public class Player : MonoBehaviour
     [SerializeField] private float wallJumpLerp = 10f;
     private Vector2 wallDir;
     private bool queueWallJump;
+    private static readonly int IsClimbing = Animator.StringToHash("IsClimbing");
 
-    [Header("Respawning")] 
-    [SerializeField] private Vector3 respawnPoint;
-    
     #endregion
 
     #region Debug
 
+    // OnDrawGizmos() draws debug information when Gizmos are toggled in the editor.
+    // Used mostly for collision debugging.
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.green;
@@ -130,6 +130,8 @@ public class Player : MonoBehaviour
 
     #region Setup
 
+    // Awake() is called once, and is the first event called in the order of execution.
+    // This method is used to setup all of the component references.
     private void Awake()
     {
         cp = GameObject.FindGameObjectWithTag("Respawn");
@@ -144,6 +146,7 @@ public class Player : MonoBehaviour
 
     #region Updates
 
+    // Update() runs every frame. Most input-dependant functionality is present here.
     private void Update()
     {
 
@@ -172,7 +175,7 @@ public class Player : MonoBehaviour
             }
             wallGrab = true;
             wallSlide = false;
-            an.SetBool("IsClimbing", true);
+            an.SetBool(IsClimbing, true);
         }
         
         if (Input.GetButtonUp("Climb") || !isWalled || !canMove)
@@ -255,6 +258,8 @@ public class Player : MonoBehaviour
         }
     }
 
+    // FixedUpdate() works on a fixed time step, and therefore is appropriate
+    // for handling physics related method calls.
     private void FixedUpdate()
     {
         CheckCollisions();
@@ -320,7 +325,6 @@ public class Player : MonoBehaviour
         dashDir = new Vector2(x, y);
 
         rb.velocity = dashDir.normalized * dashForce;
-        //Debug.Log(dashDir.normalized);
 
         StartCoroutine(DashWait(.15f));
     }
@@ -459,6 +463,36 @@ public class Player : MonoBehaviour
         rb.AddForce(dir * jumpForce, ForceMode2D.Impulse);
     }
     
+    private void FallMultiplier()
+    {
+        if (wallGrab)
+        {
+            rb.gravityScale = 0;
+        }
+        else
+        {
+            if (rb.velocity.y < 0)
+            {
+                an.SetBool("IsFalling", true);
+            }
+            
+            // Variable gravity depending on short or long jump
+            if (jumpTimer < 0.01f)
+            {
+                rb.gravityScale = fallForce;
+            } 
+            else if (rb.velocity.y > 0 && !Input.GetButton("Jump"))
+            {
+                rb.gravityScale = lowJumpFallForce;
+            }
+            else
+            {
+                rb.gravityScale = 1f;
+            }
+        }
+        
+    }
+    
     private void ApplyAirResistance()
     {
         if (horizontalDirection is > 0 or < 0 && rb.velocity.y > 0 || isDashing)
@@ -525,26 +559,7 @@ public class Player : MonoBehaviour
     
     #endregion
     
-    #region Physics
-
-    private void OnTriggerEnter2D(Collider2D collision)
-    {
-        if (collision.tag == "Obstacle")
-        {
-            // Check for Respawn Point
-            while (cp == null)
-            {
-                cp = GameObject.FindWithTag("Respawn");
-            }
-            
-            if (!cp.activeSelf)
-            {
-                cp = GameObject.FindWithTag("Respawn");
-            }
-            
-            Die();
-        }
-    }
+    #region Respawning
     
     private void Die()
     {
@@ -572,6 +587,24 @@ public class Player : MonoBehaviour
         // Move player position to respawn point
         transform.position = cp.transform.position;
     }
+    
+    #endregion
+    
+    #region Collisions
+
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        if (collision.tag == "Obstacle")
+        {
+            // Check for Respawn Point
+            while (!cp.activeSelf)
+            {
+                cp = GameObject.FindWithTag("Respawn");
+            }
+
+            Die();
+        }
+    }
 
     private void CheckCollisions()
     {
@@ -585,37 +618,7 @@ public class Player : MonoBehaviour
 
         wallSide = onRightWall ? 1 : -1;
     }
-    
-    private void FallMultiplier()
-    {
-        if (wallGrab)
-        {
-            rb.gravityScale = 0;
-        }
-        else
-        {
-            if (rb.velocity.y < 0)
-            {
-                an.SetBool("IsFalling", true);
-            }
-            
-            // Variable gravity depending on short or long jump
-            if (jumpTimer < 0.01f)
-            {
-                rb.gravityScale = fallForce;
-            } 
-            else if (rb.velocity.y > 0 && !Input.GetButton("Jump"))
-            {
-                rb.gravityScale = lowJumpFallForce;
-            }
-            else
-            {
-                rb.gravityScale = 1f;
-            }
-        }
-        
-    }
-    
+
     // Reset abilities when touching ground
     private void GroundTouch()
     {
